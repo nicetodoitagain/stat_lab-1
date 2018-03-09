@@ -8,10 +8,49 @@
 
 #TODO: Додати графіки
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets,
 
 import sys
 import Lab1
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavTool
+from matplotlib import pyplot as plt
+
+
+class MyMplCanvas(FigureCanvas):
+    """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig = plt.Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111)
+        # We want the axes cleared every time plot() is called
+        self.axes.hold(False)
+
+        self.compute_initial_figure()
+
+        #
+        FigureCanvas.__init__(self, fig)
+        self.setParent(parent)
+
+        FigureCanvas.setSizePolicy(self,
+                QtWidgets.QSizePolicy.Expanding,
+                QtWidgets.QSizePolicy.Expanding)
+        FigureCanvas.updateGeometry(self)
+
+    def compute_initial_figure(self):
+        pass
+
+
+class FrequencePoligon(MyMplCanvas):
+    def __init__(self, *args, **kwargs):
+        MyMplCanvas.__init__(self, *args, **kwargs)
+        kwargs['start_plot_func'].connect(self.update_figure)
+
+    def compute_initial_figure(self):
+        self.axes.plot([0,1,2,3],[1,2,0,4],'r')
+
+    def update_figure(self):
+        self.axes.plot(i for i in range(4))
+        self.draw()
 
 
 def table_as_list(q_table: QtWidgets.QTableWidget):
@@ -30,11 +69,8 @@ class UiMainWindow(object):
         MainWindow.resize(778, 420)
         self.main_window = QtWidgets.QWidget(MainWindow)
         self.main_window.setObjectName("main_window")
-        self.horizontalLayout_2 = QtWidgets.QHBoxLayout(self.main_window)
-        self.horizontalLayout_2.setContentsMargins(11, 11, 11, 11)
-        self.horizontalLayout_2.setSpacing(6)
-        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
-        self.horizontalLayout = QtWidgets.QHBoxLayout()
+
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self.main_window)
         self.horizontalLayout.setSpacing(6)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.verticalLayout = QtWidgets.QVBoxLayout()
@@ -71,16 +107,25 @@ class UiMainWindow(object):
         self.get_btn = QtWidgets.QPushButton(self.main_window)
         self.get_btn.setObjectName("get_btn")
         self.get_btn.clicked.connect(self.get_data_clk)
+        self.get_btn.clicked.connect(self.pol_plot)
 
         self.verticalLayout.addWidget(self.get_btn)
         self.horizontalLayout.addLayout(self.verticalLayout)
-        spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        self.horizontalLayout.addItem(spacerItem)
+
+        self.plots_scroll = QtWidgets.QScrollArea()
+        self.plots_scroll.setSizePolicy(QtWidgets.QSizePolicy.Expanding,QtWidgets.QSizePolicy.Minimum)
+
+        #poligon plot start
+        self.pol_figure = plt.figure()
+        self.pol_canvas = FigureCanvas(self.pol_figure)
+        self.toolbar = NavTool(self.pol_canvas,self.plots_scroll)
+
+        self.horizontalLayout.addWidget(self.plots_scroll)
         self.output = QtWidgets.QTextEdit(self.main_window)
         self.output.setReadOnly(True)
         self.output.setObjectName("output")
         self.horizontalLayout.addWidget(self.output)
-        self.horizontalLayout_2.addLayout(self.horizontalLayout)
+
         MainWindow.setCentralWidget(self.main_window)
         self.menuBar = QtWidgets.QMenuBar(MainWindow)
         self.menuBar.setGeometry(QtCore.QRect(0, 0, 778, 21))
@@ -115,6 +160,23 @@ class UiMainWindow(object):
             self.output.setText(str(Lab1.get_data_set(stat_data_set)))
         except Exception as error:
             self.output.setText(error.args[0])
+
+    def pol_plot(self):
+        # random data
+        import random
+        data = [random.random() for i in range(10)]
+
+        # create an axis
+        ax = self.pol_figure.add_subplot(111)
+
+        # discards the old graph
+        ax.clear()
+
+        # plot data
+        a = ax.plot(data, '*')
+
+        # refresh canvas
+        self.pol_canvas.draw()
 
 app = QtWidgets.QApplication(sys.argv)
 
