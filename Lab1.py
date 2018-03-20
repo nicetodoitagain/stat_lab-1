@@ -1,6 +1,5 @@
 from collections import namedtuple
-from math import log
-from random import randint
+from numpy import unique
 
 
 def float_range(start, stop, step=1):
@@ -20,7 +19,12 @@ def moment(data_set: list, power=1):
 
 
 def mode(data_set: list):
-    return max(set(data_set), key=lambda d: data_set.count(d))
+    m = max(data_set.count(d) for d in unique(data_set))
+
+    if len([d for d in unique(data_set) if data_set.count(d) == m]) > 1:
+        return None
+    else:
+        return m
 
 
 def median(data_set: list):
@@ -30,18 +34,6 @@ def median(data_set: list):
         return data_set[int(middle)]
     else:
         return data_set[int(middle):int(middle) + 2]
-
-
-def group_data(data_set: list):  # TODO діапазон -  півсума максимального і мінімального
-    distance = int(log(len(data_set), 2)) + 1
-    grouped_data_set = {}
-
-    for i in float_range(min(data_set), max(data_set), distance):
-        count = sum(i <= j < i + distance for j in data_set)
-        if count:
-            grouped_data_set[i + distance / 2] = count
-
-    return grouped_data_set
 
 
 def dispersion(data_set: list, corrected: bool = False):
@@ -59,11 +51,28 @@ def excess(data_set: list):
     return moment(data_set, 4) / (dispersion(data_set) ** 2) - 3
 
 
+def cumulate(data_set: list):
+    high = 0
+    result = []
+    for i in unique(data_set):
+        result.append(high + data_set.count(i))
+        high += data_set.count(i)  # TODO: refactor||delete
+    return result
+
+
+def cumulate_freq(data_set: list):
+    high = 0
+    result = []
+    for i in unique(data_set):
+        result.append(high + data_set.count(i)/len(data_set))
+        high += data_set.count(i)/len(data_set)  # TODO: refactor||delete
+    return result
+
+
 StatDataSet = namedtuple(
     "StatDataSet",
-    ["data", "mean", "mode", "median", "spread", "dispersion",
-     "deviation", "corrected_dispersion", "corrected_deviation",
-     "asymmetry", "excess"]
+    ["data", "unique", "count", "freq_count", "cumulate", "freq_cumulate", "mean", "mode", "median", "spread",
+     "dispersion", "deviation", "corrected_dispersion", "corrected_deviation", "asymmetry", "excess"]
 )
 
 
@@ -80,6 +89,11 @@ StatDataSet.__str__ = str_statdata_set
 def get_data_set(data):
     return StatDataSet(
         data=data,
+        unique=[list(unique(data))],
+        count=[data.count(i) for i in unique(data)],
+        freq_count=[data.count(i) / len(data) for i in unique(data)],
+        cumulate=cumulate(data),
+        freq_cumulate=cumulate_freq(data),
         mean=average(data),
         mode=mode(data),
         median=median(data),
@@ -90,4 +104,3 @@ def get_data_set(data):
         corrected_deviation=dispersion(data, True) ** 0.5,
         asymmetry=asymmetry(data),
         excess=excess(data))
-
