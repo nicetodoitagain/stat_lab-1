@@ -1,19 +1,10 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\Borys1\Documents\StatisticLabs\mainwindow.ui'
-#
-# Created by: PyQt5 UI code generator 5.10
-#
-# WARNING! All changes made in this file will be lost!
-
-
-from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QPushButton, QScrollArea, QTableWidget, QDoubleSpinBox, QTextEdit
-from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout, QHBoxLayout
-from PyQt5.QtWidgets import QWidget, QMainWindow, QApplication, QTableWidgetItem
+from PyQt5 import QtCore
+from PyQt5.QtWidgets import QPushButton,  QTextEdit, QSizePolicy, QGridLayout, QWidget, QMainWindow, QApplication
+from PyQt5.QtGui import QFont
 
 import sys
-from threading import Timer
 import Lab1
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -31,19 +22,8 @@ data_set1 = [-5, -4.9, -4.8, -4.7, -4.6, -4.5, -4.4, -4.3, -4.2, -4.1, -4.0, -3.
              4.9, 5]
 
 
-
-def table_to_list(q_table: QTableWidget):
-    return [
-        float(data.text()) for data in
-        map(lambda i: q_table.item(i, 0), range(q_table.rowCount()))
-        if data or data.text
-    ]
-
-
-class MyMplCanvas(FigureCanvas):
-    """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
-
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
+class FixedPlotCanvas(FigureCanvas):
+    def __init__(self, parent=None, width=5, height=4, dpi=100, default_plot=None, title=None):
         fig = plt.Figure(figsize=(width, height), dpi=dpi)
         self.axes = fig.add_subplot(111)
 
@@ -55,29 +35,24 @@ class MyMplCanvas(FigureCanvas):
                                    QSizePolicy.Maximum)
         FigureCanvas.updateGeometry(self)
         self.bounds = 0.1
-        self.data_set = None
-        self.unique = set()
-        self.axes.set_xticks(arange(-10, 10, self.bounds))
+        if default_plot:
+            self.default_plot = default_plot #TODO: default plot as a callable
+        if title:
+            self.axes.set_title(title)
 
-    def update_figure(self, data, plot_type):
-
+    def update_figure(self, data):
         self.data_set = data
         self.data_set.sort()
         self.axes.clear()
-        if plot_type == 'empiric':
-            self.empiric()
-        elif plot_type == 'freq_pol':
-            self.freq_pol()
-        elif plot_type == 'cumulate':
-            self.cumulate()
-        elif plot_type == 'cumulate_relative':
-            self.cumulate_relative()
-        elif plot_type == 'freq_pol_relative':
-            self.freq_pol_relative()
+
+        if self.default_plot:
+            self.default_plot(self) # FIXME:
+        else:
+            raise Exception('Default plot function missing')
+
         self.axes.draw(renderer=None)
 
     def freq_pol(self):
-
         spread = (self.data_set[0] - self.bounds, self.data_set[-1] + self.bounds, self.bounds)
 
         self.axes.plot(unique(self.data_set + [spread[0], spread[1]]),
@@ -150,105 +125,67 @@ class ApplicationWindow(QMainWindow):
 
         self.main_widget = QWidget(self)
 
-        self.data = QTableWidget(self.main_widget)
-        self.setup_data_table()
+        self.default_set = default_set
 
-        if default_set:
-            self.default_set = default_set
-        self.row_count = QDoubleSpinBox(self.main_widget)
-        self.setup_row_count()
-
-        self.clear_button = QPushButton(self.main_widget)
-        self.clear_button.setText('Clear')
-        self.clear_button.clicked.connect(self.data.clear)
         self.get_button = QPushButton(self.main_widget)
         self.get_button.clicked.connect(self.get_statistic)
         self.get_button.setText('Get')
 
-        self.poligon = MyMplCanvas(self.main_widget)
-        self.empiric = MyMplCanvas(self.main_widget)
-        self.cumulate = MyMplCanvas(self.main_widget)
+        self.empiric = FixedPlotCanvas(self.main_widget,
+                                       default_plot=FixedPlotCanvas.empiric,
+                                       title='Емпірична функція розподілу')
+        self.freq_pol_rel = FixedPlotCanvas(self.main_widget,
+                                            default_plot=FixedPlotCanvas.freq_pol_relative,
+                                            title='Полігон за відносними частотами')
+        self.freq_pol = FixedPlotCanvas(self.main_widget,
+                                        default_plot=FixedPlotCanvas.freq_pol,
+                                        title='Полігон за частотами')
+        self.cumulate = FixedPlotCanvas(self.main_widget,
+                                        default_plot=FixedPlotCanvas.cumulate,
+                                        title='Кумулята за частотами')
+
+        self.cumulate_rel = FixedPlotCanvas(self.main_widget,
+                                        default_plot=FixedPlotCanvas.freq_pol,
+                                        title='Кумулята за відносними частотами')
 
         self.output = QTextEdit(self.main_widget)
         self.output.setReadOnly(True)
-
-        self.freq_pol_rel = MyMplCanvas(self.main_widget)
-        self.cumulate_rel = MyMplCanvas(self.main_widget)
+        self.output.setFont(QFont('times', 15, 75))
 
         self.setup_layouts()
         self.setCentralWidget(self.main_widget)
 
-    def setup_data_table(self):
-        size_policy = QSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
-        size_policy.setHorizontalStretch(0)
-        size_policy.setVerticalStretch(0)
-        size_policy.setHeightForWidth(self.data.sizePolicy().hasHeightForWidth())
-        self.data.setSizePolicy(size_policy)
-        self.data.setRowCount(15)
-        self.data.setInputMethodHints(QtCore.Qt.ImhFormattedNumbersOnly)
-        self.data.setColumnCount(1)
-
-    def setup_row_count(self):
-        self.row_count.setDecimals(0)
-        self.row_count.setRange(15.0, 100.0)
-        self.row_count.setProperty('value', 1.0)
-        self.row_count.valueChanged.connect(self.row_count_change)
-
     def setup_layouts(self):
-        main_h_layout = QHBoxLayout(self.main_widget)
-        main_h_layout.setSpacing(6)
+        main_grid_layout = QGridLayout(self.main_widget)
+        main_grid_layout.setSpacing(6)
 
-        table_size_setter_layout = QHBoxLayout(self.main_widget)
-        table_size_setter_layout.addWidget(self.row_count)
-        table_size_setter_layout.addWidget(self.clear_button)
+        main_grid_layout.addWidget(self.output, 0, 1)
+        main_grid_layout.addWidget(self.empiric, 1, 1)
+        main_grid_layout.addWidget(self.get_button, 2, 1)
 
-        data_layout = QVBoxLayout(self.main_widget)
-        data_layout.addWidget(self.data)
-        data_layout.addLayout(table_size_setter_layout)
-        data_layout.addWidget(self.get_button)
-        main_h_layout.addLayout(data_layout)
+        main_grid_layout.addWidget(self.freq_pol, 0, 0)
+        main_grid_layout.addWidget(self.freq_pol_rel, 1, 0)
 
-        scroll_layout = QVBoxLayout(self.main_widget)
-        scroll_layout.addWidget(self.poligon)
-        scroll_layout.addWidget(self.empiric)
-        scroll_layout.addWidget(self.cumulate)
+        main_grid_layout.addWidget(self.cumulate, 0, 3)
+        main_grid_layout.addWidget(self.cumulate_rel, 1, 3)
 
-        plots_scroll = QScrollArea(self.main_widget)
-        plots_scroll.setLayout(scroll_layout)
-        main_h_layout.addWidget(plots_scroll)
-
-        l_layout = QVBoxLayout(self.main_widget)
-        l_layout.addWidget(self.output)
-        l_layout.addWidget(self.freq_pol_rel)
-        l_layout.addWidget(self.cumulate_rel)
-
-        main_h_layout.addLayout(l_layout)
-        self.main_widget.setLayout(main_h_layout)
-
-    def row_count_change(self):
-        self.data.setRowCount(self.row_count.value())
+        self.main_widget.setLayout(main_grid_layout)
 
     def get_statistic(self):
 
         try:
-            if not self.data.item(0, 0):
-                stat_data_set = choices(self.default_set, k=15) # first task
-            else:
-                stat_data_set = table_to_list(self.data)
+            stat_data_set = choices(self.default_set, k=15) # first task
 
-            if len(stat_data_set) < 2:
-                raise IOError('Not enough data')
-            self.poligon.update_figure(stat_data_set, 'freq_pol')
-            self.empiric.update_figure(stat_data_set, 'empiric')
-            self.cumulate.update_figure(stat_data_set, 'cumulate')
-            self.cumulate_rel.update_figure(stat_data_set, 'cumulate_relative')
-            self.freq_pol_rel.update_figure(stat_data_set, 'freq_pol_relative')
+            self.freq_pol.update_figure(stat_data_set)
+            self.empiric.update_figure(stat_data_set)
+            self.cumulate.update_figure(stat_data_set)
+            self.cumulate_rel.update_figure(stat_data_set)
+            self.freq_pol_rel.update_figure(stat_data_set)
             self.output.setText(str(Lab1.get_data_set(stat_data_set)))
             self.update()
             self.updateGeometry()
         except Exception as error:
             self.output.setText(error.args[0])
-
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
